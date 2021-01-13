@@ -14,9 +14,18 @@ provider:
         - "arn:aws:ssm:#{AWS::Region}:#{AWS::AccountId}:parameter/ss2jira/jiratoken"
   stackTags:
     service: ss2jira
+    deployuser: ${opt:deployuser}
+    gitrepo: ${git:repository}
+    giturl: ${opt:giturl}
+    githash: ${git:sha1}
+    gitmessage: ${git:message}
+    gitbranch: ${git:branch}
+
 custom:
   serverless-iam-roles-per-function:
     defaultInherit: true
+  exportGitVariables: false
+  #  githuborg: https://github.com/topcoder-platform/
 
 functions:
   getSSFactors:
@@ -50,4 +59,10 @@ plugins:
   - serverless-step-functions
   - serverless-pseudo-parameters
   - serverless-iam-roles-per-function
+  - serverless-plugin-git-variables
 
+    #resources:
+    #Description: >
+    #${self:service} ${git:branch}:${git:sha1}
+    #https://github.com/jacob-meacham/serverless-plugin-git-variables
+    #${git:message}
