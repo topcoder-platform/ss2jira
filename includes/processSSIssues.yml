@@ -1,0 +1,25 @@
+name: ${self:service}-processSSIssues
+definition:
+  Comment: Iterate over array of Security Scorecard issues and call another state machine to add or update issue in Jira
+  StartAt: IterateOverSecurityScoreIssues
+  States:
+    IterateOverSecurityScoreIssues:
+      Type: Map
+      ItemsPath: "$.ssissues.body.entries"
+      MaxConcurrency: 1
+      Parameters:
+        Issue.$: "$$.Map.Item.Value"
+        Metadata.$: "$.ssmetadata.body"
+      Iterator:
+        StartAt: ProcessIssueSendToJira
+        States:
+          ProcessIssueSendToJira:
+            Type: Task
+            Resource: arn:aws:states:::states:startExecution
+            Parameters:
+              Input:
+                issue.$: "$.Issue"
+                metadata.$: "$.Metadata"
+              StateMachineArn: arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:${self:service}-createOrUpdateJiraIssue
+            End: true
+      End: true

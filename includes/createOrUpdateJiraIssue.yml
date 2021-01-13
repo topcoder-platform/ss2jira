@@ -1,0 +1,44 @@
+name: ${self:service}-createOrUpdateJiraIssue
+definition: 
+  Comment: Create or update Jira issue
+  StartAt: SearchJiraExistingIssue
+  States:
+    SearchJiraExistingIssue:
+      Type: Task
+      Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-searchJiraExistingIssue
+      ResultPath: "$.jirasearchresult"
+      Next: CreateOrUpdateJiraIssue
+    CreateOrUpdateJiraIssue:
+      Type: Choice
+      Choices:
+      - Variable: "$.jirasearchresult.body.total"
+        NumericEquals: 0
+        Next: CreateJiraIssue
+      - Variable: "$.jirasearchresult.body.total"
+        NumericEquals: 1
+        Next: TransitionOrUpdateJiraIssue
+      Default: MoreThanOneJiraIssue
+    CreateJiraIssue:
+      Type: Task
+      Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-createJiraIssue
+      End: true
+    TransitionOrUpdateJiraIssue:
+      Type: Choice
+      Choices:
+      - Variable: "$.jirasearchresult.body.issues[0].fields.status.name"
+        StringEquals: Done
+        Next: TransitionJiraIssue
+      Default: UpdateJiraIssue
+    TransitionJiraIssue:
+      Type: Task
+      Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-transitionJiraIssue
+      ResultPath: 
+      Next: UpdateJiraIssue
+    UpdateJiraIssue:
+      Type: Task
+      Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-updateJiraIssue
+      End: true
+    MoreThanOneJiraIssue:
+      Type: Fail
+      Cause: More than one issue was returned in the search for this id
+      Error: Duplicate issues in Jira

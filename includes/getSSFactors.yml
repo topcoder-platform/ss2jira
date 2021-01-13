@@ -1,0 +1,47 @@
+name: ${self:service}-getSSFactors
+definition:
+  Comment: Get company factors and iterate over them until they are all loaded into Jira
+  StartAt: GetSecurityScorecardFactors
+  States:
+    GetSecurityScorecardFactors:
+      Type: Task
+      Comment: Call lambda function and factors report on company
+      Parameters:
+        url: https://api.securityscorecard.io/companies/topcoder.com/factors
+      Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-getSSFactors
+      Next: ChooseNonEmptyFactorsFromArray
+    ChooseNonEmptyFactorsFromArray:
+      Type: Map
+      Comment: Iterate over array of factors skipping empty arrays.
+      ItemsPath: "$.body.entries"
+      MaxConcurrency: 1
+      Iterator:
+        StartAt: FactorEmpty
+        States:
+          FactorEmpty:
+            Type: Choice
+            Choices:
+            - Variable: "$.issue_summary[0].type"
+              IsPresent: true
+              Next: Delaystate
+            - Variable: "$.issue_summary[0].type"
+              IsPresent: false
+              Next: NoFactor
+          NoFactor:
+            Type: Succeed
+          Delaystate:
+            Type: Wait
+            Seconds: 10
+            Next: ProcessFactor
+          ProcessFactor:
+            Type: Task
+            Resource: arn:aws:states:::states:startExecution
+            Parameters:
+              StateMachineArn: arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:${self:service}-getSSFactorTypes
+              Input:
+                NeedCallback: false
+                factorName.$: "$.name"
+                factortypes.$: "$.issue_summary"
+                AWS_STEP_FUNCTIONS_STARTED_BY_EXECUTION_ID.$: "$$.Execution.Id"
+            End: true
+      End: true

@@ -1,0 +1,43 @@
+name: ${self:service}-getSSFactorTypes
+definition:
+  Comment: Recieve an array of factor types and query Security Scorecard for the issue
+  StartAt: ProcessFactorTypes
+  States:
+    ProcessFactorTypes:
+      Type: Map
+      ItemsPath: "$.factortypes"
+      MaxConcurrency: 1
+      Parameters:
+        factor.$: "$$.Map.Item.Value"
+        factorName.$: "$.factorName"
+      Iterator:
+        StartAt: GetSecurityScorecardIssuesForFactorType
+        States:
+          GetSecurityScorecardIssuesForFactorType:
+            Type: Task
+            Parameters:
+              url.$: "$.factor.detail_url"
+            Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-getSSFactorTypes
+            ResultPath: "$.ssissues"
+            Next: GetSecurityScorecardMetadataForFactorType
+          GetSecurityScorecardMetadataForFactorType:
+            Type: Task
+            Parameters:
+              factorType.$: "$.factor.type"
+            Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${opt:stage}-getSSMetadata
+            ResultPath: "$.ssmetadata"
+            Next: Delaystate2
+          Delaystate2:
+            Type: Wait
+            Seconds: 10
+            Next: ProcessSecurityScorecardArray
+          ProcessSecurityScorecardArray:
+            Type: Task
+            Resource: arn:aws:states:::states:startExecution
+            Parameters:
+              Input:
+                ssissues.$: "$.ssissues"
+                ssmetadata.$: "$.ssmetadata"
+              StateMachineArn: arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:${self:service}-processSSIssues
+            End: true
+      End: true
